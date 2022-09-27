@@ -18,12 +18,16 @@ from utils.tac.tacprog import TACProg
 def parseArgs():
     parser = argparse.ArgumentParser(description="MiniDecaf compiler")
     parser.add_argument("--input", type=str, help="the input C file")
-    parser.add_argument("--parse", action="store_true", help="output parsed AST")
-    parser.add_argument("--tac", action="store_true", help="output transformed TAC")
-    parser.add_argument("--riscv", action="store_true", help="output generated RISC-V")
+    parser.add_argument("--parse", action="store_true",
+                        help="output parsed AST")
+    parser.add_argument("--tac", action="store_true",
+                        help="output transformed TAC")
+    parser.add_argument("--riscv", action="store_true",
+                        help="output generated RISC-V")
     return parser.parse_args()
 
 
+# read the file in string format
 def readCode(fileName):
     with open(fileName, "r") as f:
         return f.read()
@@ -64,6 +68,7 @@ def step_asm(p: TACProg):
 
 # hope all of you happiness
 # enjoy potato chips
+
 
 def main():
     args = parseArgs()
