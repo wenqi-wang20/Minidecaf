@@ -43,8 +43,9 @@ class UnaryOp(Operator):
     """
 
     Neg = "-"
+    Not = "!"
     BitNot = "~"
-    LogicNot = "!"
+    
 
 
 @unique

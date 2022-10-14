@@ -1,3 +1,4 @@
+from ast import Not
 from enum import Enum, auto, unique
 from typing import Any, Optional, Union
 
@@ -8,7 +9,6 @@ from utils.tac.reg import Reg
 from .tacop import *
 from .tacvisitor import TACVisitor
 from .temp import Temp
-
 
 class TACInstr:
     def __init__(
@@ -44,14 +44,14 @@ class TACInstr:
         self.dsts = dstRegs
         self.srcs = srcRegs
         instrString = self.__str__()
-        newInstr = NativeInstr(self.kind, dstRegs, srcRegs, self.label, instrString)
+        newInstr = NativeInstr(
+            self.kind, dstRegs, srcRegs, self.label, instrString)
         self.dsts = oldDsts
         self.srcs = oldSrcs
         return newInstr
 
     def accept(self, v: TACVisitor) -> None:
         pass
-
 
 # Assignment instruction.
 class Assign(TACInstr):
@@ -90,11 +90,23 @@ class Unary(TACInstr):
         self.operand = operand
 
     def __str__(self) -> str:
-        return "%s = %s %s" % (
-            self.dst,
-            ("-" if (self.op == UnaryOp.NEG) else "!"),
-            self.operand,
-        )
+
+        # wwq
+        op_str = ""
+        if self.op == UnaryOp.NEG:
+            op_str = "-"
+        elif self.op == UnaryOp.SEQZ:
+            op_str = "!"
+        elif self.op == UnaryOp.NOT:
+            op_str = "~"
+
+        return "%s = %s %s" % (self.dst, op_str, self.operand)
+
+        # return "%s = %s %s" % (
+        #     self.dst,
+        #     ("-" if (self.op == UnaryOp.NEG) else "!"),
+        #     self.operand,
+        # )
 
     def accept(self, v: TACVisitor) -> None:
         v.visitUnary(self)
@@ -122,8 +134,8 @@ class Binary(TACInstr):
             BinaryOp.LEQ: "<=",
             BinaryOp.SGT: ">",
             BinaryOp.GEQ: ">=",
-            BinaryOp.AND: "&&",
-            BinaryOp.OR: "||",
+            BinaryOp.LAND: "&&",
+            BinaryOp.LOR: "||",
         }[self.op]
         return "%s = (%s %s %s)" % (self.dst, self.lhs, opStr, self.rhs)
 

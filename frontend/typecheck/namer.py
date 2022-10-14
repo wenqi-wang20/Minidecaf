@@ -33,6 +33,7 @@ class Namer(Visitor[ScopeStack, None]):
         return program
 
     def visitProgram(self, program: Program, ctx: ScopeStack) -> None:
+
         # Check if the 'main' function is missing
         if not program.hasMainFunc():
             raise DecafNoMainFuncError

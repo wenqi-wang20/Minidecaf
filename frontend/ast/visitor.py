@@ -49,6 +49,7 @@ class Visitor(Protocol[T, U]):  # type: ignore
     def visitDeclaration(self, that: Declaration, ctx: T) -> Optional[U]:
         return self.visitOther(that, ctx)
 
+    # 添加相应的分派函数
     def visitUnary(self, that: Unary, ctx: T) -> Optional[U]:
         return self.visitOther(that, ctx)
 

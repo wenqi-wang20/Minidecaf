@@ -1,3 +1,4 @@
+from curses.ascii import SUB
 from typing import Sequence, Tuple
 
 from backend.asmemitter import AsmEmitter
@@ -25,7 +26,6 @@ class RiscvAsmEmitter(AsmEmitter):
     ) -> None:
         super().__init__(allocatableRegs, callerSaveRegs)
 
-    
         # the start of the asm code
         # int step10, you need to add the declaration of global var here
         self.printer.println(".text")
@@ -59,7 +59,7 @@ class RiscvAsmEmitter(AsmEmitter):
             self.entry = entry
             self.seq = []
 
-        # in step11, you need to think about how to deal with globalTemp in almost all the visit functions. 
+        # in step11, you need to think about how to deal with globalTemp in almost all the visit functions.
         def visitReturn(self, instr: Return) -> None:
             if instr.value is not None:
                 self.seq.append(Riscv.Move(Riscv.A0, instr.value))
@@ -75,29 +75,85 @@ class RiscvAsmEmitter(AsmEmitter):
 
         def visitUnary(self, instr: Unary) -> None:
             self.seq.append(Riscv.Unary(instr.op, instr.dst, instr.operand))
- 
+
+        # 这里需要根据不同的指令码添加不同长度的汇编
         def visitBinary(self, instr: Binary) -> None:
-            self.seq.append(Riscv.Binary(instr.op, instr.dst, instr.lhs, instr.rhs))
+            op = instr.op
+
+            if op == BinaryOp.EQU:
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.SUB, instr.dst, instr.lhs, instr.rhs
+                ))
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SEQZ, instr.dst, instr.dst
+                ))
+            elif op == BinaryOp.NEQ:
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.SUB, instr.dst, instr.lhs, instr.rhs
+                ))
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SNEZ, instr.dst, instr.dst
+                ))
+            elif op == BinaryOp.LEQ:
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.SGT, instr.dst, instr.lhs, instr.rhs
+                ))
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SEQZ, instr.dst, instr.dst
+                ))
+            elif op == BinaryOp.GEQ:
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.SLT, instr.dst, instr.lhs, instr.rhs
+                ))
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SEQZ, instr.dst, instr.dst
+                ))
+            elif op == BinaryOp.LOR:
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.OR, instr.dst, instr.lhs, instr.rhs
+                ))
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SNEZ, instr.dst, instr.dst
+                ))
+            elif op == BinaryOp.LAND:
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SNEZ, instr.dst, instr.lhs
+                ))
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.SUB, instr.dst, Riscv.ZERO, instr.dst
+                ))
+                self.seq.append(Riscv.Binary(
+                    BinaryOp.AND, instr.dst, instr.dst, instr.rhs
+                ))
+                self.seq.append(Riscv.Unary(
+                    UnaryOp.SNEZ, instr.dst, instr.dst
+                ))
+            else:
+                self.seq.append(Riscv.Binary(
+                    instr.op, instr.dst, instr.lhs, instr.rhs))
 
         def visitCondBranch(self, instr: CondBranch) -> None:
             self.seq.append(Riscv.Branch(instr.cond, instr.label))
-        
+
         def visitBranch(self, instr: Branch) -> None:
             self.seq.append(Riscv.Jump(instr.target))
 
         # in step9, you need to think about how to pass the parameters and how to store and restore callerSave regs
-        # in step11, you need to think about how to store the array 
+        # in step11, you need to think about how to store the array
+
+
 """
 RiscvAsmEmitter: an SubroutineEmitter for RiscV
 """
 
+
 class RiscvSubroutineEmitter(SubroutineEmitter):
     def __init__(self, emitter: RiscvAsmEmitter, info: SubroutineInfo) -> None:
         super().__init__(emitter, info)
-        
-        # + 4 is for the RA reg 
+
+        # + 4 is for the RA reg
         self.nextLocalOffset = 4 * len(Riscv.CalleeSaved) + 4
-        
+
         # the buf which stored all the NativeInstrs in this function
         self.buf: list[NativeInstr] = []
 
@@ -112,7 +168,7 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
     def emitComment(self, comment: str) -> None:
         # you can add some log here to help you debug
         pass
-    
+
     # store some temp to stack
     # usually happen when reaching the end of a basicblock
     # in step9, you need to think about the fuction parameters here
@@ -143,7 +199,6 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
     def emitLabel(self, label: Label):
         self.buf.append(Riscv.RiscvLabel(label).toNative([], []))
 
-    
     def emitEnd(self):
         self.printer.printComment("start of prologue")
         self.printer.printInstr(Riscv.SPAdd(-self.nextLocalOffset))
@@ -153,7 +208,8 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
         for i in range(len(Riscv.CalleeSaved)):
             if Riscv.CalleeSaved[i].isUsed():
                 self.printer.printInstr(
-                    Riscv.NativeStoreWord(Riscv.CalleeSaved[i], Riscv.SP, 4 * i)
+                    Riscv.NativeStoreWord(
+                        Riscv.CalleeSaved[i], Riscv.SP, 4 * i)
                 )
 
         self.printer.printComment("end of prologue")

@@ -21,6 +21,7 @@ tokens = lex.tokens
 error_stack = list[DecafSyntaxError]()
 
 
+# 根据算符来搜索相应的一元操作符
 def unary(p):
     p[0] = Unary(UnaryOp.backward_search(p[1]), p[2])
 
@@ -260,7 +261,8 @@ def p_error(t):
         return
 
     inp = t.lexer.lexdata
-    error_stack.append(DecafSyntaxError(t, f"\n{inp.splitlines()[t.lineno - 1]}"))
+    error_stack.append(DecafSyntaxError(
+        t, f"\n{inp.splitlines()[t.lineno - 1]}"))
 
     parser.errok()
     return parser.token()

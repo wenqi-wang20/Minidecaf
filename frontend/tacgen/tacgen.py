@@ -96,7 +96,8 @@ class TACGen(Visitor[FuncVisitor, None]):
 
         mv.visitLabel(beginLabel)
         stmt.cond.accept(self, mv)
-        mv.visitCondBranch(tacop.CondBranchOp.BEQ, stmt.cond.getattr("val"), breakLabel)
+        mv.visitCondBranch(tacop.CondBranchOp.BEQ,
+                           stmt.cond.getattr("val"), breakLabel)
 
         stmt.body.accept(self, mv)
         mv.visitLabel(loopLabel)
@@ -110,6 +111,9 @@ class TACGen(Visitor[FuncVisitor, None]):
         op = {
             node.UnaryOp.Neg: tacop.UnaryOp.NEG,
             # You can add unary operations here.
+            # add the logicnot and bitnot operation
+            node.UnaryOp.Not: tacop.UnaryOp.SEQZ,
+            node.UnaryOp.BitNot: tacop.UnaryOp.NOT,
         }[expr.op]
         expr.setattr("val", mv.visitUnary(op, expr.operand.getattr("val")))
 
@@ -119,10 +123,24 @@ class TACGen(Visitor[FuncVisitor, None]):
 
         op = {
             node.BinaryOp.Add: tacop.BinaryOp.ADD,
+            # TODO
             # You can add binary operations here.
-        }[expr.op]
+            node.BinaryOp.Sub: tacop.BinaryOp.SUB,
+            node.BinaryOp.Mul: tacop.BinaryOp.MUL,
+            node.BinaryOp.Div: tacop.BinaryOp.DIV,
+            node.BinaryOp.Mod: tacop.BinaryOp.REM,
+
+            node.BinaryOp.LT: tacop.BinaryOp.SLT,
+            node.BinaryOp.GT: tacop.BinaryOp.SGT,
+            node.BinaryOp.LE: tacop.BinaryOp.LEQ,
+            node.BinaryOp.GE: tacop.BinaryOp.GEQ,
+            node.BinaryOp.EQ: tacop.BinaryOp.EQU,
+            node.BinaryOp.NE: tacop.BinaryOp.NEQ,
+            node.BinaryOp.LogicAnd: tacop.BinaryOp.LAND,
+            node.BinaryOp.LogicOr: tacop.BinaryOp.LOR}[expr.op]
         expr.setattr(
-            "val", mv.visitBinary(op, expr.lhs.getattr("val"), expr.rhs.getattr("val"))
+            "val", mv.visitBinary(op, expr.lhs.getattr(
+                "val"), expr.rhs.getattr("val"))
         )
 
     def visitCondExpr(self, expr: ConditionExpression, mv: FuncVisitor) -> None:

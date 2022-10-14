@@ -252,6 +252,7 @@ class Unary(Expression):
 
     def __init__(self, op: UnaryOp, operand: Expression) -> None:
         super().__init__(f"unary({op.value})")
+
         self.op = op
         self.operand = operand
 

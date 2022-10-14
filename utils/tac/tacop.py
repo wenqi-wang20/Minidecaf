@@ -20,8 +20,9 @@ class InstrKind(Enum):
 @unique
 class UnaryOp(Enum):
     NEG = auto()
-    NOT = auto()
-    SEQZ = auto()
+    NOT = auto()   # bit not
+
+    SEQZ = auto()  # logic not
     SNEZ = auto()
 
 
@@ -41,6 +42,10 @@ class BinaryOp(Enum):
     GEQ = auto()
     AND = auto()
     OR = auto()
+
+    # wwq
+    LAND = auto()
+    LOR = auto()
 
 
 # Kinds of branching with conditions.

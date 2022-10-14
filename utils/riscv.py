@@ -120,12 +120,12 @@ class Riscv:
             return "{} ".format(self.op) + Riscv.FMT3.format(
                 str(self.dsts[0]), str(self.srcs[0]), str(self.srcs[1])
             )
-    
+
     class Branch(TACInstr):
         def __init__(self, cond: Temp, target: Label) -> None:
             super().__init__(InstrKind.COND_JMP, [], [cond], target)
             self.target = target
-        
+
         def __str__(self) -> str:
             return "beq " + Riscv.FMT3.format(str(Riscv.ZERO), str(self.srcs[0]), str(self.target))
 
@@ -133,7 +133,7 @@ class Riscv:
         def __init__(self, target: Label) -> None:
             super().__init__(InstrKind.JMP, [], [], target)
             self.target = target
-        
+
         def __str__(self) -> str:
             return "j " + str(self.target)
 
