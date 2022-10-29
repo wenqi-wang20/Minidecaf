@@ -17,6 +17,6 @@ class VarSymbol(Symbol):
     def __str__(self) -> str:
         return "variable %s : %s" % (self.name, str(self.type))
 
-    # To set the initial value of a variable symbol (used for global variable).
+    # * To set the initial value of a variable symbol (used for global variable).
     def setInitValue(self, value: int) -> None:
         self.initValue = value

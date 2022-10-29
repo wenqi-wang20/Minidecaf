@@ -23,7 +23,7 @@ class Namer(Visitor[ScopeStack, None]):
     def __init__(self) -> None:
         pass
 
-    # Entry of this phase
+    # * Entry of this phase
     def transform(self, program: Program) -> Program:
         # Global scope. You don't have to consider it until Step 9.
         program.globalScope = GlobalScope
@@ -64,7 +64,7 @@ class Namer(Visitor[ScopeStack, None]):
         stmt.cond.accept(self, ctx)
         stmt.then.accept(self, ctx)
 
-        # check if the else branch exists
+        # * check if the else branch exists
         if not stmt.otherwise is NULL:
             stmt.otherwise.accept(self, ctx)
 
@@ -99,13 +99,30 @@ class Namer(Visitor[ScopeStack, None]):
         3. Set the 'symbol' attribute of decl.
         4. If there is an initial value, visit it.
         """
-        pass
+        # * Step 5
+        if ctx.findConflict(decl.ident.value):
+            raise DecafDeclConflictError(decl.ident.value)
+        else:
+            symbol = VarSymbol(decl.ident.value, decl.var_t)
+            ctx.declare(symbol)
+            # * use the setattr to set the symbol attribute of decl
+            decl.setattr("symbol", symbol)
+            if decl.init_expr is not NULL:
+                # * in this case,  we use the namer visitor the visit the init expression, like visitBinary, VisitUnary etc.
+                decl.init_expr.accept(self, ctx)
 
     def visitAssignment(self, expr: Assignment, ctx: ScopeStack) -> None:
         """
         1. Refer to the implementation of visitBinary.
         """
-        pass
+        # * Step 5
+        if not ctx.lookup(expr.lhs.value):
+            raise DecafUndefinedVarError(expr.lhs.value)
+        else:
+            expr.lhs.accept(self, ctx)
+            expr.rhs.accept(self, ctx)
+
+            expr.lhs.setattr("symbol", ctx.lookup(expr.lhs.value))
 
     def visitUnary(self, expr: Unary, ctx: ScopeStack) -> None:
         expr.operand.accept(self, ctx)
@@ -118,7 +135,10 @@ class Namer(Visitor[ScopeStack, None]):
         """
         1. Refer to the implementation of visitBinary.
         """
-        pass
+        # * Step 6
+        expr.cond.accept(self, ctx)
+        expr.then.accept(self, ctx)
+        expr.otherwise.accept(self, ctx)
 
     def visitIdentifier(self, ident: Identifier, ctx: ScopeStack) -> None:
         """
@@ -126,7 +146,11 @@ class Namer(Visitor[ScopeStack, None]):
         2. If it has not been declared, raise a DecafUndefinedVarError.
         3. Set the 'symbol' attribute of ident.
         """
-        pass
+        # * Step 5
+        if not ctx.lookup(ident.value):
+            raise DecafUndefinedVarError(ident.value)
+        else:
+            ident.setattr("symbol", ctx.lookup(ident.value))
 
     def visitIntLiteral(self, expr: IntLiteral, ctx: ScopeStack) -> None:
         value = expr.value

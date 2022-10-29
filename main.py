@@ -48,6 +48,8 @@ def step_parse(args: argparse.Namespace):
 
 # IR generation stage: Abstract syntax tree -> Three-address code
 def step_tac(p: Program):
+
+    #  check 3 times
     namer = Namer()
     p = namer.transform(p)
     typer = Typer()

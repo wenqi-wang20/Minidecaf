@@ -48,7 +48,8 @@ class TACGen(Visitor[FuncVisitor, None]):
         """
         1. Set the 'val' attribute of ident as the temp variable of the 'symbol' attribute of ident.
         """
-        pass
+        temp = ident.getattr("symbol").temp
+        ident.setattr("val", temp)
 
     def visitDeclaration(self, decl: Declaration, mv: FuncVisitor) -> None:
         """
@@ -56,7 +57,13 @@ class TACGen(Visitor[FuncVisitor, None]):
         2. Use mv.freshTemp to get a new temp variable for this symbol.
         3. If the declaration has an initial value, use mv.visitAssignment to set it.
         """
-        pass
+        # * Step 5
+        symbol = decl.getattr("symbol")
+        temp = mv.freshTemp()
+        symbol.temp = temp
+        if decl.init_expr is not NULL:
+            decl.init_expr.accept(self, mv)
+            mv.visitAssignment(temp, decl.init_expr.getattr("val"))
 
     def visitAssignment(self, expr: Assignment, mv: FuncVisitor) -> None:
         """
@@ -64,7 +71,10 @@ class TACGen(Visitor[FuncVisitor, None]):
         2. Use mv.visitAssignment to emit an assignment instruction.
         3. Set the 'val' attribute of expr as the value of assignment instruction.
         """
-        pass
+        # * Step 5
+        expr.rhs.accept(self, mv)
+        temp = expr.lhs.getattr("symbol").temp
+        expr.setattr("val", mv.visitAssignment(temp, expr.rhs.getattr("val")))
 
     def visitIf(self, stmt: If, mv: FuncVisitor) -> None:
         stmt.cond.accept(self, mv)
@@ -147,7 +157,26 @@ class TACGen(Visitor[FuncVisitor, None]):
         """
         1. Refer to the implementation of visitIf and visitBinary.
         """
-        pass
+        # * Step 6
+        # * assign the temp variable in conditional expression to the val attribute
+        expr.cond.accept(self, mv)
+
+        skipLabel = mv.freshLabel()
+        exitLabel = mv.freshLabel()
+        temp = mv.freshTemp()
+        mv.visitCondBranch(
+            tacop.CondBranchOp.BEQ, expr.cond.getattr("val"), skipLabel
+        )
+        expr.then.accept(self, mv)
+        mv.visitAssignment(temp, expr.then.getattr("val"))
+        expr.setattr("val", temp)
+        mv.visitBranch(exitLabel)
+        mv.visitLabel(skipLabel)
+        expr.otherwise.accept(self, mv)
+        mv.visitAssignment(
+            temp, expr.otherwise.getattr("val"))
+        expr.setattr("val", temp)
+        mv.visitLabel(exitLabel)
 
     def visitIntLiteral(self, expr: IntLiteral, mv: FuncVisitor) -> None:
         expr.setattr("val", mv.visitLoad(expr.value))
