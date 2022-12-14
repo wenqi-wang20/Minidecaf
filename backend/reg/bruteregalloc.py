@@ -28,6 +28,7 @@ because we can remove all the GlobalTemp in selectInstr process
 6. allocRegFor：根据数据流决定为当前 Temp 分配哪一个寄存器
 """
 
+
 class BruteRegAlloc(RegAlloc):
     def __init__(self, emitter: RiscvAsmEmitter) -> None:
         super().__init__(emitter)
@@ -37,12 +38,15 @@ class BruteRegAlloc(RegAlloc):
 
     def accept(self, graph: CFG, info: SubroutineInfo) -> None:
         subEmitter = self.emitter.emitSubroutine(info)
+        id = 0
         for bb in graph.iterator():
             # you need to think more here
             # maybe we don't need to alloc regs for all the basic blocks
             if bb.label is not None:
                 subEmitter.emitLabel(bb.label)
-            self.localAlloc(bb, subEmitter)
+            if graph.unreachable(id) == False:
+                self.localAlloc(bb, subEmitter)
+            id += 1
         subEmitter.emitEnd()
 
     def bind(self, temp: Temp, reg: Reg):
@@ -84,14 +88,16 @@ class BruteRegAlloc(RegAlloc):
             if isinstance(temp, Reg):
                 srcRegs.append(temp)
             else:
-                srcRegs.append(self.allocRegFor(temp, True, loc.liveIn, subEmitter))
+                srcRegs.append(self.allocRegFor(
+                    temp, True, loc.liveIn, subEmitter))
 
         for i in range(len(instr.dsts)):
             temp = instr.dsts[i]
             if isinstance(temp, Reg):
                 dstRegs.append(temp)
             else:
-                dstRegs.append(self.allocRegFor(temp, False, loc.liveIn, subEmitter))
+                dstRegs.append(self.allocRegFor(
+                    temp, False, loc.liveIn, subEmitter))
 
         subEmitter.emitNative(instr.toNative(dstRegs, srcRegs))
 
@@ -119,11 +125,13 @@ class BruteRegAlloc(RegAlloc):
             random.randint(0, len(self.emitter.allocatableRegs))
         ]
         subEmitter.emitStoreToStack(reg)
-        subEmitter.emitComment("  spill {} ({})".format(str(reg), str(reg.temp)))
+        subEmitter.emitComment(
+            "  spill {} ({})".format(str(reg), str(reg.temp)))
         self.unbind(reg.temp)
         self.bind(temp, reg)
         subEmitter.emitComment(
-            "  allocate {} to {} (read: {})".format(str(temp), str(reg), str(isRead))
+            "  allocate {} to {} (read: {})".format(
+                str(temp), str(reg), str(isRead))
         )
         if isRead:
             subEmitter.emitLoadFromStack(reg, temp)

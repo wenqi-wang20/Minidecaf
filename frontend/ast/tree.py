@@ -193,6 +193,78 @@ class Break(Statement):
         return True
 
 
+# * Step 8
+class For(Statement):
+    """
+    AST node of for statement.
+    """
+
+    def __init__(
+        self,
+        body: Statement,
+        init: Optional[Union[Expression, Declaration]] = None,
+        cond: Optional[Expression] = None,
+        step: Optional[Expression] = None
+    ) -> None:
+        super().__init__("for")
+        self.init = init or NULL
+        self.cond = cond or NULL
+        self.step = step or NULL
+        self.body = body
+
+    def __getitem__(self, key: int) -> Node:
+        return (self.init, self.cond, self.step, self.body)[key]
+
+    def __len__(self) -> int:
+        return 4
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitFor(self, ctx)
+
+
+class DoWhile(Statement):
+    """
+    AST node of do-while statement.
+    """
+
+    def __init__(self, cond: Expression, body: Statement) -> None:
+        super().__init__("do-while")
+        self.cond = cond
+        self.body = body
+
+    def __getitem__(self, key: int) -> Node:
+        return (self.cond, self.body)[key]
+
+    def __len__(self) -> int:
+        return 2
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitDoWhile(self, ctx)
+
+
+class Continue(Statement):
+    """
+    AST node of continue statement.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("continue")
+
+    def __getitem__(self, key: int) -> Node:
+        raise _index_len_err(key, self)
+
+    def __len__(self) -> int:
+        return 0
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitContinue(self, ctx)
+
+    def is_leaf(self):
+        return True
+
+
+# * Step 7
+# block is actually block item list with statement or declaration
 class Block(Statement, ListNode[Union["Statement", "Declaration"]]):
     """
     AST node of block "statement".

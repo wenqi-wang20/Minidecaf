@@ -10,6 +10,7 @@ Else:
 Refer to https://www.dabeaz.com/ply/ply.html for more details.
 """
 
+# * Step 8
 # Reserved keywords
 reserved = {
     "return": "Return",
@@ -18,6 +19,9 @@ reserved = {
     "else": "Else",
     "while": "While",
     "break": "Break",
+    "continue": "Continue",
+    "for": "For",
+    "do": "Do",
 }
 
 t_Semi = ";"

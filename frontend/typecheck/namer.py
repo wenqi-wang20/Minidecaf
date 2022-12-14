@@ -23,6 +23,7 @@ class Namer(Visitor[ScopeStack, None]):
     def __init__(self) -> None:
         pass
 
+    # * Step 7
     # * Entry of this phase
     def transform(self, program: Program) -> Program:
         # Global scope. You don't have to consider it until Step 9.
@@ -43,9 +44,14 @@ class Namer(Visitor[ScopeStack, None]):
     def visitFunction(self, func: Function, ctx: ScopeStack) -> None:
         func.body.accept(self, ctx)
 
+    # * Step 7 done
+    # open a new scope for the block before visiting the block
+    # and close the scope after visiting the block
     def visitBlock(self, block: Block, ctx: ScopeStack) -> None:
+        ctx.open(Scope(ScopeKind.LOCAL))
         for child in block:
             child.accept(self, ctx)
+        ctx.close()
 
     def visitReturn(self, stmt: Return, ctx: ScopeStack) -> None:
         stmt.expr.accept(self, ctx)
@@ -91,6 +97,7 @@ class Namer(Visitor[ScopeStack, None]):
         """
         1. Refer to the implementation of visitBreak.
         """
+        # stmt.accept(self, ctx)
 
     def visitDeclaration(self, decl: Declaration, ctx: ScopeStack) -> None:
         """
@@ -156,3 +163,32 @@ class Namer(Visitor[ScopeStack, None]):
         value = expr.value
         if value > MAX_INT:
             raise DecafBadIntValueError(value)
+
+    # * Step 8
+    def visitFor(self, stmt: For, ctx: ScopeStack) -> None:
+        # for 语句内部的变量声明，需要在 for 语句的作用域内
+        ctx.open(Scope(ScopeKind.LOCAL))
+        stmt.init.accept(self, ctx)
+        stmt.cond.accept(self, ctx)
+        stmt.step.accept(self, ctx)
+
+        # for 语句的循环体也会有新的作用域
+        ctx.open(Scope(ScopeKind.LOCAL))
+        ctx.openLoop()
+        stmt.body.accept(self, ctx)
+        ctx.closeLoop()
+        ctx.close()
+        ctx.close()
+
+    def visitDoWhile(self, stmt: DoWhile, ctx: ScopeStack) -> None:
+        ctx.open(Scope(ScopeKind.LOCAL))
+        ctx.openLoop()
+        stmt.body.accept(self, ctx)
+        ctx.closeLoop()
+        ctx.close()
+        stmt.cond.accept(self, ctx)
+
+    def visitContinue(self, stmt: Continue, ctx: ScopeStack) -> None:
+        if not ctx.inLoop():
+            raise DecafContinueOutsideLoopError()
+        # stmt.accept(self, ctx)
