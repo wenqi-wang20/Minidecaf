@@ -1,0 +1,1 @@
+python main.py --input self-test.c --tac > self-cout-2.out

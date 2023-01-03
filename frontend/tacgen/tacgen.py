@@ -19,19 +19,58 @@ class TACGen(Visitor[FuncVisitor, None]):
     def __init__(self) -> None:
         pass
 
+    # * Step 9 done
     # Entry of this phase
     def transform(self, program: Program) -> TACProg:
-        mainFunc = program.mainFunc()
-        pw = ProgramWriter(["main"])
-        # The function visitor of 'main' is special.
-        mv = pw.visitMainFunc()
+        func_names = [func_name for func_name in program.functions()]
+        var_symbols = [program.globalvars()[var_name].getattr("symbol")
+                       for var_name in program.globalvars()]
 
-        mainFunc.body.accept(self, mv)
-        # Remember to call mv.visitEnd after the translation a function.
-        mv.visitEnd()
+        # * Step 10
+        pw = ProgramWriter(func_names, var_symbols)
 
+        for func_name in program.functions():
+            if func_name == "main":
+                mainFunc = program.mainFunc()
+                # The function visitor of 'main' is special.
+                mv = pw.visitMainFunc()
+                mainFunc.body.accept(self, mv)
+                mv.visitEnd([])
+            else:
+                func = program.functions()[func_name]
+                # ? 只当函数定义后再生成 TAC 码
+                if func.body is not None:
+                    numArgs = len(func.params.children)
+                    mv = pw.visitFunc(func_name, numArgs)
+                    # 为参数分配临时变量
+                    params_tmp = []
+                    for param in func.params:
+                        param_symbol = param.getattr("symbol")
+                        param_symbol.temp = mv.freshTemp()
+                        params_tmp.append(param_symbol.temp)
+                    # func.params.accept(self, mv)
+                    func.body.accept(self, mv)
+                    # Remember to call mv.visitEnd after the translation a function.
+                    mv.visitEnd(params_tmp)
         # Remember to call pw.visitEnd before finishing the translation phase.
         return pw.visitEnd()
+
+    # * Step 9 done
+    # 在某个函数体中使用函数调用
+    def visitCall(self, func_call: Call, mv: FuncVisitor) -> None:
+        args_tmp = []
+        # ? 先设置函数调用所需要的全部参数
+        for param in func_call.args:
+            param.accept(self, mv)
+            temp = param.getattr("val")
+            mv.visitParam(temp)
+            args_tmp.append(temp)
+
+        # ? 这里需要访问 CALL 指令，并且新建临时变量为函数设置返回值
+        ret_val = mv.freshTemp()
+        mv.visitCall(ret_val, mv.ctx.getFuncLabel(
+            func_call.ident.value), args_tmp)
+        func_call.setattr("val", ret_val)
 
     def visitBlock(self, block: Block, mv: FuncVisitor) -> None:
         for child in block:
@@ -48,8 +87,18 @@ class TACGen(Visitor[FuncVisitor, None]):
         """
         1. Set the 'val' attribute of ident as the temp variable of the 'symbol' attribute of ident.
         """
-        temp = ident.getattr("symbol").temp
-        ident.setattr("val", temp)
+        # * Step 10
+        var_symbol: VarSymbol = ident.getattr("symbol")
+        if var_symbol.isGlobal:
+            # ? 全局变量的访问
+            addr_tmp = mv.freshTemp()
+            mv.visitLoadSymbol(addr_tmp, var_symbol.name)
+            dst_tmp = mv.freshTemp()
+            mv.visitLoadW(dst_tmp, addr_tmp, 0)
+            ident.setattr("val", dst_tmp)
+        else:
+            # ? 局部变量的访问
+            ident.setattr("val", var_symbol.temp)
 
     def visitDeclaration(self, decl: Declaration, mv: FuncVisitor) -> None:
         """
@@ -72,9 +121,21 @@ class TACGen(Visitor[FuncVisitor, None]):
         3. Set the 'val' attribute of expr as the value of assignment instruction.
         """
         # * Step 5
+        # * Step 10
+        lhs_symbol: VarSymbol = expr.lhs.getattr("symbol")
         expr.rhs.accept(self, mv)
-        temp = expr.lhs.getattr("symbol").temp
-        expr.setattr("val", mv.visitAssignment(temp, expr.rhs.getattr("val")))
+        val_tmp = expr.rhs.getattr("val")
+        if lhs_symbol.isGlobal:
+            # ? 全局变量的赋值
+            addr_tmp = mv.freshTemp()
+            mv.visitLoadSymbol(addr_tmp, lhs_symbol.name)
+            mv.visitStoreW(val_tmp, addr_tmp, 0)
+            expr.setattr("val", val_tmp)
+        else:
+            # ? 局部变量的赋值
+            lhs_temp = expr.lhs.getattr("symbol").temp
+            val_tmp = mv.visitAssignment(lhs_temp, val_tmp)
+            expr.setattr("val", val_tmp)
 
     def visitIf(self, stmt: If, mv: FuncVisitor) -> None:
         stmt.cond.accept(self, mv)

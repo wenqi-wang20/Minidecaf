@@ -33,20 +33,146 @@ class Namer(Visitor[ScopeStack, None]):
         program.accept(self, ctx)
         return program
 
+    # * Step 9 done
+
     def visitProgram(self, program: Program, ctx: ScopeStack) -> None:
 
         # Check if the 'main' function is missing
         if not program.hasMainFunc():
             raise DecafNoMainFuncError
 
-        program.mainFunc().accept(self, ctx)
+        # * Step 10
+        # 遍历所有全局变量，注意这里不能够使用 program.globalvars()，因为这个函数会返回一个 dict，自动去重
+        for child in program:
+            if isinstance(child, Declaration):
+                global_var = child
+            else:
+                continue
+            # ? 重复定义
+            if ctx.findConflict(global_var.ident.value) is not None:
+                raise DecafGlobalVarDefinedTwiceError(global_var.ident.value)
 
+            var_symbol = VarSymbol(
+                global_var.ident.value, global_var.var_t, isGlobal=True)
+            # ? 如果有初始化表达式，则设置全局变量的初值
+            if global_var.init_expr is not NULL:
+                global_var.init_expr.accept(self, ctx)
+                var_symbol.setInitValue(global_var.init_expr.value)
+
+            ctx.declare(var_symbol)
+            global_var.setattr("symbol", var_symbol)
+
+        # program.mainFunc().accept(self, ctx)
+        # 遍历 program 中所有的函数
+        for child in program:
+            if isinstance(child, Function):
+                func = child
+            else:
+                continue
+            func.accept(self, ctx)
+
+    # * Step 9 done
     def visitFunction(self, func: Function, ctx: ScopeStack) -> None:
-        func.body.accept(self, ctx)
+
+        # ? 不允许函数定义在局部作用域
+        if not ctx.isGlobalScope():
+            raise DecafSyntaxError()
+
+        # 声明函数符号
+        func_symbol = FuncSymbol(
+            func.ident.value, func.ret_t, GlobalScope)
+
+        # 检查函数是否重复定义
+        if ctx.findConflict(func_symbol.name) is not None:
+            conflict_symbol = ctx.findConflict(func_symbol.name)
+
+            # ? 如果符号被定义为其他类型，则报错
+            if not isinstance(conflict_symbol, FuncSymbol):
+                raise DecafDeclConflictError(conflict_symbol.name)
+            # ? 如果函数被定义过两次，则报错
+            if GlobalScope.isDefined(conflict_symbol) and func.body is not None:
+                raise DecafDeclConflictError(conflict_symbol.name)
+            # ? 参数个数不同，报错
+            if conflict_symbol.parameterNum != len(func.params):
+                raise DecafDeclConflictError(conflict_symbol.name)
+            # ? 依次检查参数类型是否相同
+            if func.params is not None:
+                for i in range(len(func.params)):
+                    if func.params[i].var_type.__str__() != conflict_symbol.getParaType(i).__str__():
+                        raise DecafDeclConflictError(conflict_symbol.name)
+            # ? 如果函数已经声明过，并且此处有定义，则定义该函数
+            if func.body is not None:
+                # 新增函数作用域
+                func.setattr("symbol", conflict_symbol)
+                ctx.open(Scope(ScopeKind.LOCAL))
+                func.params.accept(self, ctx)
+                # 无需再开启 block 作用域
+                for child in func.body:
+                    child.accept(self, ctx)
+                ctx.close()
+                GlobalScope.define(conflict_symbol)
+        else:
+            # print(f"fisrt declare: {func.ident.value}")
+            # 说明没有重复定义
+            func.setattr("symbol", func_symbol)
+            # 如果函数有参数，则依次加入到函数符号中
+            if func.params is not None:
+                for param in func.params:
+                    # 将参数类型加入到函数符号中
+                    func_symbol.addParaType(param.var_type)
+            GlobalScope.declare(func_symbol)
+
+            # 如果函数体不为空，说明是函数定义
+            if func.body is not None:
+                # 新增函数作用域
+                ctx.open(Scope(ScopeKind.LOCAL))
+                func.params.accept(self, ctx)
+                # 无需再开启 block 作用域
+                for child in func.body:
+                    child.accept(self, ctx)
+                ctx.close()
+                GlobalScope.define(func_symbol)
+                # print(f"first define: {func.ident.value}")
+
+    # * Step 9 done
+    def visitParameterList(self, parameter_list: Parameter_list, ctx: ScopeStack) -> None:
+        for param in parameter_list:
+            param.accept(self, ctx)
+
+    # * Step 9 done
+    def visitParameterItem(self, param: Parameter_item, ctx: ScopeStack) -> Optional[U]:
+        # 检查参数的重复定义
+        if ctx.findConflict(param.ident.value) is not None:
+            raise DecafDeclConflictError(param.ident.value)
+
+        # 为函数定义中的参数创建符号，并且加入到当前作用域中
+        var_symbol = VarSymbol(param.ident.value, param.var_type)
+        ctx.declare(var_symbol)
+        param.setattr("symbol", var_symbol)
+
+    # * Step 9 done
+    def visitCall(self, func_call: Call, ctx: ScopeStack) -> Optional[U]:
+        # ? 先检查函数符号是否存在
+        if not GlobalScope.containsKey(func_call.ident.value):
+            raise DecafUndefinedVarError(func_call.ident.value)
+        # ? 检查函数符号是否冲突
+        if ctx.findConflict(func_call.ident.value) is not None:
+            raise DecafDeclConflictError
+
+        # 根据 lookup 函数的返回值，挨个检查参数类型是否匹配
+        # ? 检查参数个数是否匹配
+        call_symbol = cast(FuncSymbol, GlobalScope.get(func_call.ident.value))
+        if len(func_call.args) != call_symbol.parameterNum:
+            raise DecafBadFuncCallError
+        for arg in func_call.args:
+            arg.accept(self, ctx)
+        # ? 检查参数类型是否匹配
+        # ? 实际不需要检查，因为都是 INT 类型
 
     # * Step 7 done
     # open a new scope for the block before visiting the block
     # and close the scope after visiting the block
+
     def visitBlock(self, block: Block, ctx: ScopeStack) -> None:
         ctx.open(Scope(ScopeKind.LOCAL))
         for child in block:
@@ -123,13 +249,14 @@ class Namer(Visitor[ScopeStack, None]):
         1. Refer to the implementation of visitBinary.
         """
         # * Step 5
-        if not ctx.lookup(expr.lhs.value):
+        if ctx.lookup(expr.lhs.value) is None:
             raise DecafUndefinedVarError(expr.lhs.value)
         else:
             expr.lhs.accept(self, ctx)
             expr.rhs.accept(self, ctx)
 
             expr.lhs.setattr("symbol", ctx.lookup(expr.lhs.value))
+            expr.setattr("symbol", ctx.lookup(expr.lhs.value))
 
     def visitUnary(self, expr: Unary, ctx: ScopeStack) -> None:
         expr.operand.accept(self, ctx)
@@ -154,7 +281,7 @@ class Namer(Visitor[ScopeStack, None]):
         3. Set the 'symbol' attribute of ident.
         """
         # * Step 5
-        if not ctx.lookup(ident.value):
+        if ctx.lookup(ident.value) is None:
             raise DecafUndefinedVarError(ident.value)
         else:
             ident.setattr("symbol", ctx.lookup(ident.value))

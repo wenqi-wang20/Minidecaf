@@ -40,9 +40,34 @@ def p_empty(p: yacc.YaccProduction):
     pass
 
 
+# * Step 9 done
 def p_program(p):
     """
+    program : program function
+    """
+    p[1].children.append(p[2])
+    p[0] = p[1]
+
+
+def p_program_single_function(p):
+    """
     program : function
+    """
+    p[0] = Program(p[1])
+
+
+# * Step 10 done
+def p_global_var(p):
+    """
+    program : program declaration Semi
+    """
+    p[1].children.append(p[2])
+    p[0] = p[1]
+
+
+def p_global_var_single(p):
+    """
+    program : declaration Semi
     """
     p[0] = Program(p[1])
 
@@ -54,11 +79,19 @@ def p_type(p):
     p[0] = TInt()
 
 
+# * Step 9
 def p_function_def(p):
     """
-    function : type Identifier LParen RParen LBrace block RBrace
+    function : type Identifier LParen parameter_list RParen LBrace block RBrace
     """
-    p[0] = Function(p[1], p[2], p[6])
+    p[0] = Function(p[1], p[2], p[4], p[7])
+
+
+def p_function_decl(p):
+    """
+    function : type Identifier LParen parameter_list RParen Semi
+    """
+    p[0] = Function(p[1], p[2], p[4], None)
 
 
 def p_block(p):
@@ -292,6 +325,75 @@ def p_continue(p):
     statement_matched : Continue Semi
     """
     p[0] = Continue()
+
+
+# * Step 9 done
+def p_parameter_item(p):
+    """
+    parameter_item : type Identifier
+    """
+    p[0] = Parameter_item(p[1], p[2])
+
+
+# * Step 9 done
+def p_parameter_list(p):
+    """
+    parameter_list : parameter_list Comma parameter_item
+    """
+    if p[3] is not NULL:
+        p[1].children.append(p[3])
+    p[0] = p[1]
+
+
+# * Step 9 done
+def p_parameter_single(p):
+    """
+    parameter_list : parameter_item
+    """
+    p[0] = Parameter_list()
+    p[0].children.append(p[1])
+
+
+# * Step 9 done
+def p_parameter_empty(p):
+    """
+    parameter_list : empty
+    """
+    p[0] = Parameter_list()
+
+
+# * Step 9 done
+def p_expression_list(p):
+    """
+    expression_list : expression_list Comma expression
+    """
+    p[1].children.append(p[3])
+    p[0] = p[1]
+
+
+# * Step 9 done
+def p_expression_single(p):
+    """
+    expression_list : expression
+    """
+    p[0] = Expression_list()
+    p[0].children.append(p[1])
+
+
+# * Step 9 done
+def p_expression_empty(p):
+    """
+    expression_list : empty
+    """
+    p[0] = Expression_list()
+
+
+# * Step 9 done
+def p_call(p):
+    """
+    postfix : Identifier LParen expression_list RParen
+    """
+    p[0] = Call(p[1], p[3])
 
 
 parser = yacc.yacc(start="program")

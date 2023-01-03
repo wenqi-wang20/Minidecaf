@@ -83,11 +83,32 @@ class FuncVisitor:
     def visitRaw(self, instr: TACInstr) -> None:
         self.func.add(instr)
 
-    def visitEnd(self) -> None:
+    def visitEnd(self, paras_tmp_list: list[Temp]) -> None:
         if (len(self.func.instrSeq) == 0) or (not self.func.instrSeq[-1].isReturn()):
             self.func.add(Return(None))
+        self.func.params = paras_tmp_list
         self.func.tempUsed = self.getUsedTemp()
         self.ctx.funcs.append(self.func)
+
+    # * Step 9 done
+    def visitParam(self, arg: Temp) -> None:
+        self.func.add(Param(arg))
+
+    # * Step 9 done
+    def visitCall(self, ret_val: Temp, func: FuncLabel, argument_list: list[Temp]) -> None:
+        self.func.add(Call(ret_val, func, argument_list))
+
+    # * Step 10
+    def visitLoadSymbol(self, dst: Temp, symbol: str) -> None:
+        self.func.add(LoadSymbol(dst, symbol))
+
+    # * Step 10
+    def visitLoadW(self, dst: Temp, src: Temp, offset: int) -> None:
+        self.func.add(LoadW(dst, src, offset))
+
+    # * Step 10
+    def visitStoreW(self, dst: Temp, src: Temp, offset: int) -> None:
+        self.func.add(StoreW(dst, src, offset))
 
     # To open a new loop (for break/continue statements)
     def openLoop(self, breakLabel: Label, continueLabel: Label) -> None:

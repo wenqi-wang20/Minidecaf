@@ -176,3 +176,77 @@ class Riscv:
 
         def __str__(self) -> str:
             return "ret"
+
+    # * Step 9 done
+    class NativeMoveWord(NativeInstr):
+        def __init__(self, dst: Reg, src: Reg) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [src], None)
+
+        def __str__(self) -> str:
+            return "mv " + Riscv.FMT2.format(str(self.dsts[0]), str(self.srcs[0]))
+
+    # * Step 9 done
+    class Param(TACInstr):
+        def __init__(self, src: Temp) -> None:
+            super().__init__(InstrKind.SEQ, [], [src], None)
+            self.src = src
+
+        def __str__(self) -> str:
+            return ''
+
+    # * Step 9 done
+    class Call(TACInstr):
+        def __init__(self, dst: Temp, func: FuncLabel, arguments_list: list[Temp]) -> None:
+            super().__init__(InstrKind.SEQ, [dst], arguments_list, func)
+            self.func = func
+            self.arguments_list = arguments_list
+            self.ret_val = dst
+
+        def __str__(self) -> str:
+            return "call %s" % (str(self.func.func))
+
+    # * Step 9
+    class LoadReg(TACInstr):
+        def __init__(self, dst: Temp, src: Reg) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [], None)
+            self.src = src
+
+        def __str__(self) -> str:
+            return 'mv ' + Riscv.FMT2.format(str(self.dsts[0]), str(self.src))
+
+    # * Step 9
+    class LoadOffsetReg(TACInstr):
+        def __init__(self, dst: Temp, base: Reg, offset: int) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [], None)
+            self.base = base
+            self.offset = offset
+
+        def __str__(self) -> str:
+            return 'lw ' + Riscv.FMT_OFFSET.format(self.dsts[0], self.offset, self, self.base)
+
+    # * Step 10
+    class LoadSymbol(TACInstr):
+        def __init__(self, dst: Temp, symbol: str) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [], None)
+            self.symbol = symbol
+
+        def __str__(self) -> str:
+            return 'la ' + Riscv.FMT2.format(self.dsts[0], self.symbol)
+
+    # * Step 10
+    class LoadW(TACInstr):
+        def __init__(self, dst: Temp, src: Temp, offset: int) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [src], None)
+            self.offset = offset
+
+        def __str__(self) -> str:
+            return 'lw ' + Riscv.FMT_OFFSET.format(self.dsts[0], self.offset, self.srcs[0])
+
+    # * Step 10
+    class StoreW(TACInstr):
+        def __init__(self, dst: Temp, src: Temp, offset: int) -> None:
+            super().__init__(InstrKind.SEQ, [], [dst, src], None)
+            self.offset = offset
+
+        def __str__(self) -> str:
+            return 'sw ' + Riscv.FMT_OFFSET.format(self.srcs[0], self.offset, self.srcs[1])

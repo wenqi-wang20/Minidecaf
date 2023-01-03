@@ -8,6 +8,7 @@ class TACFunc:
         self.entry = entry
         self.numArgs = numArgs
         self.instrSeq = []
+        self.params = []
         self.tempUsed = 0
 
     def getInstrSeq(self) -> list[TACInstr]:

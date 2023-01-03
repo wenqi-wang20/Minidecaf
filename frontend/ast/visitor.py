@@ -84,6 +84,22 @@ class Visitor(Protocol[T, U]):  # type: ignore
     def visitContinue(self, that: Continue, ctx: T) -> Optional[U]:
         return self.visitOther(that, ctx)
 
+    # * Step 9 done
+    def visitParameterItem(self, that: Parameter_item, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
+    # * Step 9 done
+    def visitParameterList(self, that: Parameter_list, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
+    # * Step 9 done
+    def visitExpressionList(self, that: Expression_list, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
+    # * Step 9 done
+    def visitCall(self, that: Call, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
 
 class RecursiveVisitor(Visitor[T, U]):
     def visitOther(self, node: Node, ctx: T) -> Optional[Sequence[Optional[U]]]:

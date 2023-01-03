@@ -45,16 +45,19 @@ class ListNode(Node, Generic[_T]):
         return None if ret.count(None) == len(ret) else ret
 
 
-class Program(ListNode["Function"]):
+class Program(ListNode[Union["Function", "Declaration"]]):
     """
     AST root. It should have only one children before step9.
     """
 
-    def __init__(self, *children: Function) -> None:
+    def __init__(self, *children: Union[Function, Declaration]) -> None:
         super().__init__("program", list(children))
 
     def functions(self) -> dict[str, Function]:
         return {func.ident.value: func for func in self if isinstance(func, Function)}
+
+    def globalvars(self) -> dict[str, Declaration]:
+        return {var.ident.value: var for var in self if isinstance(var, Declaration)}
 
     def hasMainFunc(self) -> bool:
         return "main" in self.functions()
@@ -66,6 +69,8 @@ class Program(ListNode["Function"]):
         return v.visitProgram(self, ctx)
 
 
+# * Step 9
+# ? body = NULL
 class Function(Node):
     """
     AST node that represents a function.
@@ -75,22 +80,25 @@ class Function(Node):
         self,
         ret_t: TypeLiteral,
         ident: Identifier,
+        params: Parameter_list,
         body: Block,
     ) -> None:
         super().__init__("function")
         self.ret_t = ret_t
         self.ident = ident
+        self.params = params
         self.body = body
 
     def __getitem__(self, key: int) -> Node:
         return (
             self.ret_t,
             self.ident,
+            self.params,
             self.body,
         )[key]
 
     def __len__(self) -> int:
-        return 3
+        return 4
 
     def accept(self, v: Visitor[T, U], ctx: T):
         return v.visitFunction(self, ctx)
@@ -498,3 +506,95 @@ class TInt(TypeLiteral):
 
     def accept(self, v: Visitor[T, U], ctx: T):
         return v.visitTInt(self, ctx)
+
+
+# * Step 9 done
+class Parameter_item(Node):
+    """
+    AST node of parameter.
+    """
+
+    def __init__(self, var_type: TypeLiteral, ident: Identifier) -> None:
+        super().__init__("parameter")
+        self.var_type = var_type
+        self.ident = ident
+
+    def __getitem__(self, key: int) -> Node:
+        return (self.var_type, self.name)[key]
+
+    def __len__(self) -> int:
+        return 2
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitParameterItem(self, ctx)
+
+
+# * Step 9 done
+class Parameter_list(ListNode["Parameter_item"]):
+    """
+    AST node of parameter.
+    """
+
+    def __init__(self, *children: Parameter_item) -> None:
+        super().__init__("parameter_list", list(children))
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitParameterList(self, ctx)
+
+
+# * Step 9 done
+class Expression_list(ListNode["Expression"]):
+    """
+    AST node of parameter.
+    """
+
+    def __init__(self, *children: Expression) -> None:
+        super().__init__("expression_list", list(children))
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitExpressionList(self, ctx)
+
+
+# * Step 9 done
+class Call(Node):
+    """
+    AST node of function call.
+    """
+
+    def __init__(self, ident: Identifier, argument_list: Expression_list) -> None:
+        super().__init__("call")
+        self.ident = ident
+        self.args = argument_list
+
+    def __getitem__(self, key: int) -> Node:
+        return (self.ident, self.args)[key]
+
+    def __len__(self) -> int:
+        return 2
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitCall(self, ctx)
+
+
+# * Step 11
+class IndexExpression(Expression):
+    """
+    AST node of index expression.
+    """
+
+    def __init__(self, ident: Identifier, index: Expression) -> None:
+        super().__init__("index_expr")
+        self.ident = ident
+        self.index = index
+
+    def __getitem__(self, key: int) -> Node:
+        return (self.ident, self.index)[key]
+
+    def __len__(self) -> int:
+        return 2
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitIndexExpr(self, ctx)
+
+    def __str__(self) -> str:
+        return f"{self.ident}[{self.index}]"

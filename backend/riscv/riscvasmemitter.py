@@ -9,7 +9,7 @@ from utils.tac.reg import Reg
 from utils.tac.tacfunc import TACFunc
 from utils.tac.tacinstr import *
 from utils.tac.tacvisitor import TACVisitor
-
+from frontend.symbol.varsymbol import VarSymbol
 from ..subroutineemitter import SubroutineEmitter
 from ..subroutineinfo import SubroutineInfo
 
@@ -23,8 +23,39 @@ class RiscvAsmEmitter(AsmEmitter):
         self,
         allocatableRegs: list[Reg],
         callerSaveRegs: list[Reg],
+        global_vars: list[VarSymbol]
     ) -> None:
         super().__init__(allocatableRegs, callerSaveRegs)
+
+        # * Step 10
+        # ? data 段为已初始化的全局变量
+        # ? bss 段为未初始化的全局变量
+        _data = []
+        _bss = []
+
+        for var in global_vars:
+            if var.initValue != 0:
+                _data.append(var)
+            else:
+                _bss.append(var)
+
+        if len(_data) > 0:
+            self.printer.println(".data")
+            globl_vars = ','.join([var.name for var in _data])
+            self.printer.println(f".globl {globl_vars}")
+            for var in _data:
+                self.printer.println(f"{var.name}: ")
+                self.printer.println(f".word {var.initValue}")
+            self.printer.println("")
+
+        if len(_bss) > 0:
+            self.printer.println(".bss")
+            globl_vars = ','.join([var.name for var in _bss])
+            self.printer.println(f".globl {globl_vars}")
+            for var in _bss:
+                self.printer.println(f"{var.name}: ")
+                self.printer.println(f".space {var.type.type.size}")
+            self.printer.println("")
 
         # the start of the asm code
         # int step10, you need to add the declaration of global var here
@@ -32,13 +63,25 @@ class RiscvAsmEmitter(AsmEmitter):
         self.printer.println(".global main")
         self.printer.println("")
 
-    # transform tac instrs to RiscV instrs
-    # collect some info which is saved in SubroutineInfo for SubroutineEmitter
+    # ? transform tac instrs to RiscV instrs
+    # ? collect some info which is saved in SubroutineInfo for SubroutineEmitter
     def selectInstr(self, func: TACFunc) -> tuple[list[str], SubroutineInfo]:
 
         selector: RiscvAsmEmitter.RiscvInstrSelector = (
             RiscvAsmEmitter.RiscvInstrSelector(func.entry)
         )
+
+        for i in range(len(func.params)):
+            temp = func.params[i]
+            if i <= 7:
+                selector.seq.append(Riscv.LoadReg(
+                    temp, Riscv.ArgRegs[i]
+                ))
+            else:
+                selector.seq.append(Riscv.LoadOffsetReg(
+                    temp, Riscv.FP, i * 4
+                ))
+
         for instr in func.getInstrSeq():
             instr.accept(selector)
 
@@ -142,6 +185,26 @@ class RiscvAsmEmitter(AsmEmitter):
             self.seq.append(Riscv.Move(instr.dst, instr.src))
 
         # in step9, you need to think about how to pass the parameters and how to store and restore callerSave regs
+        # * Step 9
+        def visitParam(self, instr: Param) -> None:
+            self.seq.append(Riscv.Param(instr.param))
+
+        # * Step 9
+        def visitCall(self, instr: Call) -> None:
+            self.seq.append(Riscv.Call(instr.dst, instr.func, instr.args))
+
+        # * Step 10
+        def visitLoadSymbol(self, instr: LoadSymbol) -> None:
+            self.seq.append(Riscv.LoadSymbol(instr.dst, instr.symbol))
+
+        # * Step 10
+        def visitLoadW(self, instr: LoadW) -> None:
+            self.seq.append(Riscv.LoadW(instr.dst, instr.src, instr.offset))
+
+        # * Step 10
+        def visitStoreW(self, instr: StoreW) -> None:
+            self.seq.append(Riscv.StoreW(instr.dst, instr.src, instr.offset))
+
         # in step11, you need to think about how to store the array
 
 
@@ -155,7 +218,8 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
         super().__init__(emitter, info)
 
         # + 4 is for the RA reg
-        self.nextLocalOffset = 4 * len(Riscv.CalleeSaved) + 4
+        # + 4 is for the SP reg
+        self.nextLocalOffset = 4 * len(Riscv.CalleeSaved) + 8
 
         # the buf which stored all the NativeInstrs in this function
         self.buf: list[NativeInstr] = []
@@ -177,7 +241,7 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
     # in step9, you need to think about the fuction parameters here
     def emitStoreToStack(self, src: Reg) -> None:
         if src.temp.index not in self.offsets:
-            self.offsets[src.temp.index] = self.nextLocalOffset
+            self.offsets[src.temp.index] = self.nextLocalOffset - 8
             self.nextLocalOffset += 4
         self.buf.append(
             Riscv.NativeStoreWord(src, Riscv.SP, self.offsets[src.temp.index])
@@ -187,6 +251,8 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
     # usually happen when using a temp which is stored to stack before
     # in step9, you need to think about the fuction parameters here
     def emitLoadFromStack(self, dst: Reg, src: Temp):
+        # print(self.offsets)
+        # print(src.index)
         if src.index not in self.offsets:
             raise IllegalArgumentException()
         else:
@@ -202,8 +268,12 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
     def emitLabel(self, label: Label):
         self.buf.append(Riscv.RiscvLabel(label).toNative([], []))
 
+    # * Step 9
     def emitEnd(self):
         self.printer.printComment("start of prologue")
+        self.printer.printInstr(Riscv.NativeStoreWord(Riscv.RA, Riscv.SP, -4))
+        self.printer.printInstr(Riscv.NativeStoreWord(Riscv.FP, Riscv.SP, -8))
+        self.printer.printInstr(Riscv.NativeMoveWord(Riscv.FP, Riscv.SP))
         self.printer.printInstr(Riscv.SPAdd(-self.nextLocalOffset))
 
         # in step9, you need to think about how to store RA here
@@ -242,6 +312,8 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
                 )
 
         self.printer.printInstr(Riscv.SPAdd(self.nextLocalOffset))
+        self.printer.printInstr(Riscv.NativeLoadWord(Riscv.RA, Riscv.SP, -4))
+        self.printer.printInstr(Riscv.NativeLoadWord(Riscv.FP, Riscv.SP, -8))
         self.printer.printComment("end of epilogue")
         self.printer.println("")
 

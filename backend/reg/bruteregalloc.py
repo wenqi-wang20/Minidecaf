@@ -65,11 +65,67 @@ class BruteRegAlloc(RegAlloc):
         for reg in self.emitter.allocatableRegs:
             reg.occupied = False
 
+        # * Step 9
         # in step9, you may need to think about how to store callersave regs here
+        args_stack = []
         for loc in bb.allSeq():
-            subEmitter.emitComment(str(loc.instr))
 
-            self.allocForLoc(loc, subEmitter)
+            # 如果是分配函数参数的指令；
+            if isinstance(loc.instr, Riscv.Param):
+                # ? 遇到 param 指令不做处理，直接把参数压栈
+                # ? 等到 call 指令时，再分配寄存器
+                args_stack.append(loc.instr.srcs[0])
+            # 如果是函数调用的指令
+            elif isinstance(loc.instr, Riscv.Call):
+                saved_args = []
+                for caller_save_reg in Riscv.CallerSaved:
+                    # 将 caller_save_reg 存到栈中
+                    if caller_save_reg.occupied and caller_save_reg.temp.index in loc.liveIn:
+                        subEmitter.emitStoreToStack(caller_save_reg)
+                        saved_args.append(
+                            (caller_save_reg, caller_save_reg.temp))
+                        # 解开变量和寄存器的绑定
+                        self.unbind(caller_save_reg.temp)
+
+                # ? 将参数依次存入 A0-A7
+                argnum = len(loc.instr.arguments_list)
+                func_args_stack = args_stack[-argnum:]
+                for i in range(argnum):
+                    arg = func_args_stack[i]
+                    if i < 8:
+                        arg_tmp_reg = self.allocRegFor(
+                            arg, True, loc.liveIn, subEmitter)
+                        subEmitter.emitNative(Riscv.NativeMoveWord(
+                            Riscv.ArgRegs[i], arg_tmp_reg))
+                        self.unbind(arg)
+                        self.bind(arg, Riscv.ArgRegs[i])
+                    else:
+                        subEmitter.emitNative(Riscv.NativeStoreWord(
+                            self.allocRegFor(arg, True, loc.liveIn, subEmitter), Riscv.SP, 4 * (i - len(func_args_stack))))
+
+                # ? sub sp
+                if argnum >= 8:
+                    subEmitter.emitNative(Riscv.SPAdd(
+                        - 4 * (argnum - 8)))
+                # ? call func
+                subEmitter.emitNative(loc.instr.toNative([], []))
+                self.bind(loc.instr.ret_val, Riscv.A0)
+
+                # ? add sp
+                if argnum >= 8:
+                    subEmitter.emitNative(Riscv.SPAdd(
+                        4 * (argnum - 8)))
+                # ? pop func args
+                args_stack = args_stack[:-argnum]
+                # ? restore caller_save_reg
+                for reg, temp in saved_args:
+                    if reg.occupied:
+                        subEmitter.emitStoreToStack(reg)
+                        self.unbind(reg.temp)
+                    subEmitter.emitLoadFromStack(reg, temp)
+                    self.bind(temp, reg)
+            else:
+                self.allocForLoc(loc, subEmitter)
 
         for tempindex in bb.liveOut:
             if tempindex in self.bindings:

@@ -1,0 +1,10 @@
+FUNCTION<main>:
+    _T0 = 5
+    _T1 = 6
+    _T2 = (_T0 != _T1)
+    if (_T2 == 0) branch _L1
+    _T3 = 1
+    return _T3
+_L1:
+    _T4 = 0
+    return _T4

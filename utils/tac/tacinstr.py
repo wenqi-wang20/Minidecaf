@@ -10,6 +10,7 @@ from .tacop import *
 from .tacvisitor import TACVisitor
 from .temp import Temp
 
+
 class TACInstr:
     def __init__(
         self,
@@ -52,6 +53,7 @@ class TACInstr:
 
     def accept(self, v: TACVisitor) -> None:
         pass
+
 
 # Assignment instruction.
 class Assign(TACInstr):
@@ -214,3 +216,76 @@ class Mark(TACInstr):
 
     def accept(self, v: TACVisitor) -> None:
         v.visitMark(self)
+
+
+# * Step 9 done
+class Param(TACInstr):
+    def __init__(self, param: Temp) -> None:
+        super().__init__(InstrKind.SEQ, [], [param], None)
+        self.param = param
+
+    def __str__(self) -> str:
+        return "param %s" % str(self.param)
+
+    def accept(self, v: TACVisitor) -> None:
+        v.visitParam(self)
+
+
+# * Step 9 done
+class Call(TACInstr):
+    def __init__(self, dst: Temp, func: Label, argument_list: list[Temp]) -> None:
+        super().__init__(InstrKind.SEQ, [dst], argument_list, func)
+        self.dst = dst
+        self.func = func
+        self.numArgs = len(argument_list)
+        self.args = argument_list
+
+    def __str__(self) -> str:
+        return "%s = call %s" % (self.dst, self.func)
+
+    def accept(self, v: TACVisitor) -> None:
+        v.visitCall(self)
+
+
+# * Step 10
+class LoadSymbol(TACInstr):
+    def __init__(self, dst: Temp, symbol: str) -> None:
+        super().__init__(InstrKind.SEQ, [dst], [], None)
+        self.dst = dst
+        self.symbol = symbol
+
+    def __str__(self) -> str:
+        return "%s = load_symbol %s" % (self.dst, self.symbol)
+
+    def accept(self, v: TACVisitor) -> None:
+        v.visitLoadSymbol(self)
+
+
+# * Step 10
+class LoadW(TACInstr):
+    def __init__(self, dst: Temp, src: Temp, offset: int) -> None:
+        super().__init__(InstrKind.SEQ, [dst], [src], None)
+        self.dst = dst
+        self.src = src
+        self.offset = offset
+
+    def __str__(self) -> str:
+        return "%s = load %s %d" % (self.dst, self.src, self.offset)
+
+    def accept(self, v: TACVisitor) -> None:
+        v.visitLoadW(self)
+
+
+# * Step 10
+class StoreW(TACInstr):
+    def __init__(self, dst: Temp, src: Temp, offset: int) -> None:
+        super().__init__(InstrKind.SEQ, [dst], [src], None)
+        self.dst = dst
+        self.src = src
+        self.offset = offset
+
+    def __str__(self) -> str:
+        return "store %s %d %s" % (self.dst, self.offset, self.src)
+
+    def accept(self, v: TACVisitor) -> None:
+        v.visitStoreW(self)
