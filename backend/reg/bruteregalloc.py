@@ -124,6 +124,10 @@ class BruteRegAlloc(RegAlloc):
                         self.unbind(reg.temp)
                     subEmitter.emitLoadFromStack(reg, temp)
                     self.bind(temp, reg)
+            elif isinstance(loc.instr, Riscv.Alloc):
+                base_reg = self.allocRegFor(
+                    loc.instr.dsts[0], False, loc.liveIn, subEmitter)
+                subEmitter.emitAllocOnStack(base_reg, loc.instr.size)
             else:
                 self.allocForLoc(loc, subEmitter)
 

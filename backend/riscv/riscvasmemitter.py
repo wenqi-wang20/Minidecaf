@@ -27,14 +27,15 @@ class RiscvAsmEmitter(AsmEmitter):
     ) -> None:
         super().__init__(allocatableRegs, callerSaveRegs)
 
-        # * Step 10
-        # ? data 段为已初始化的全局变量
+        # * Step 10 done
+        # * Step 11 done
+        # ? data 段为已初始化的全局变量（不包括全局数组）
         # ? bss 段为未初始化的全局变量
         _data = []
         _bss = []
 
         for var in global_vars:
-            if var.initValue != 0:
+            if not var.isArray and var.initValue != 0:
                 _data.append(var)
             else:
                 _bss.append(var)
@@ -206,6 +207,8 @@ class RiscvAsmEmitter(AsmEmitter):
             self.seq.append(Riscv.StoreW(instr.dst, instr.src, instr.offset))
 
         # in step11, you need to think about how to store the array
+        def visitAlloc(self, instr: Alloc) -> None:
+            self.seq.append(Riscv.Alloc(instr.dst, instr.size))
 
 
 """
@@ -268,7 +271,14 @@ class RiscvSubroutineEmitter(SubroutineEmitter):
     def emitLabel(self, label: Label):
         self.buf.append(Riscv.RiscvLabel(label).toNative([], []))
 
-    # * Step 9
+    # * Step 11 done
+    def emitAllocOnStack(self, dst: Reg, size: int):
+        # ? 在栈上为数组分配空间
+        self.buf.append(Riscv.CalLocation(
+            dst, Riscv.SP, self.nextLocalOffset-8))
+        self.nextLocalOffset += size
+
+    # * Step 9 done
     def emitEnd(self):
         self.printer.printComment("start of prologue")
         self.printer.printInstr(Riscv.NativeStoreWord(Riscv.RA, Riscv.SP, -4))

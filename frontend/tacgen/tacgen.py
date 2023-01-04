@@ -9,6 +9,7 @@ from utils.tac.funcvisitor import FuncVisitor
 from utils.tac.programwriter import ProgramWriter
 from utils.tac.tacprog import TACProg
 from utils.tac.temp import Temp
+from utils.label.funclabel import FuncLabel
 
 """
 The TAC generation phase: translate the abstract syntax tree into three-address code.
@@ -25,9 +26,12 @@ class TACGen(Visitor[FuncVisitor, None]):
         func_names = [func_name for func_name in program.functions()]
         var_symbols = [program.globalvars()[var_name].getattr("symbol")
                        for var_name in program.globalvars()]
+        global_init = [program.globalvars()[var_name]
+                       for var_name in program.globalvars()]
 
         # * Step 10
         pw = ProgramWriter(func_names, var_symbols)
+        pw.global_init = global_init
 
         for func_name in program.functions():
             if func_name == "main":
@@ -38,7 +42,7 @@ class TACGen(Visitor[FuncVisitor, None]):
                 mv.visitEnd([])
             else:
                 func = program.functions()[func_name]
-                # ? 只当函数定义后再生成 TAC 码
+                # ? 当函数定义后再生成 TAC 码
                 if func.body is not None:
                     numArgs = len(func.params.children)
                     mv = pw.visitFunc(func_name, numArgs)
@@ -54,6 +58,28 @@ class TACGen(Visitor[FuncVisitor, None]):
                     mv.visitEnd(params_tmp)
         # Remember to call pw.visitEnd before finishing the translation phase.
         return pw.visitEnd()
+
+    # * Step 11 done
+    def visitIndexExpression(self, indexExpr: IndexExpression, mv: FuncVisitor) -> None:
+        # ? 区分为局部数组的访问和全局数组的访问
+        expr_symbol: VarSymbol = indexExpr.getattr("symbol")
+        val_tmp = mv.freshTemp()
+        addr_tmp = mv.freshTemp()
+        if expr_symbol.isGlobal:
+            # ? 全局数组的访问
+            mv.visitLoadSymbol(addr_tmp, expr_symbol.name)
+        else:
+            # ? 局部数组的访问
+            mv.visitAssignment(addr_tmp, expr_symbol.temp)
+
+        now_type = expr_symbol.type.type
+        for index in indexExpr.indexes:
+            index.accept(self, mv)
+            mv.visitArrayLoc(addr_tmp, index.getattr(
+                "val"), now_type.base.size)
+            now_type = now_type.base
+        mv.visitLoadW(val_tmp, addr_tmp, 0)
+        indexExpr.setattr("val", val_tmp)
 
     # * Step 9 done
     # 在某个函数体中使用函数调用
@@ -93,9 +119,14 @@ class TACGen(Visitor[FuncVisitor, None]):
             # ? 全局变量的访问
             addr_tmp = mv.freshTemp()
             mv.visitLoadSymbol(addr_tmp, var_symbol.name)
-            dst_tmp = mv.freshTemp()
-            mv.visitLoadW(dst_tmp, addr_tmp, 0)
-            ident.setattr("val", dst_tmp)
+            # * Step 11 done
+            # ? 区分是否是数组，来决定是载入数组的地址还是载入数的值
+            if var_symbol.isArray:
+                ident.setattr("val", addr_tmp)
+            else:
+                dst_tmp = mv.freshTemp()
+                mv.visitLoadW(dst_tmp, addr_tmp, 0)
+                ident.setattr("val", dst_tmp)
         else:
             # ? 局部变量的访问
             ident.setattr("val", var_symbol.temp)
@@ -107,12 +138,38 @@ class TACGen(Visitor[FuncVisitor, None]):
         3. If the declaration has an initial value, use mv.visitAssignment to set it.
         """
         # * Step 5
-        symbol = decl.getattr("symbol")
+        symbol: VarSymbol = decl.getattr("symbol")
         temp = mv.freshTemp()
         symbol.temp = temp
-        if decl.init_expr is not NULL:
-            decl.init_expr.accept(self, mv)
-            mv.visitAssignment(temp, decl.init_expr.getattr("val"))
+        # * Step 11 done
+        if symbol.isArray:
+            # ? 局部数组的声明，需要分配空间
+            mv.visitAlloc(temp, symbol.type.type.size)
+
+            # ? 如果局部数组有初始值，需要赋值，这里需要调用 'fill_n' 函数
+            # ? fill_n(数组地址，初始值，数组长度)
+            if decl.init_expr is not NULL:
+                # ? 加载参数
+                mv.visitParam(temp)
+                num_tmp = mv.visitLoad(0)
+                mv.visitParam(num_tmp)
+                len_tmp = mv.visitLoad(symbol.type.type.size)
+                mv.visitParam(len_tmp)
+
+                # ? 调用 fill_n 函数填充为 0
+                val_tmp = mv.freshTemp()
+                mv.visitCall(val_tmp, FuncLabel("fill_n"),
+                             [temp, num_tmp, len_tmp])
+                init_vars = decl.init_expr.children
+                # ? 逐个赋值
+                for i in range(len(init_vars)):
+                    var_tmp = mv.visitLoad(init_vars[i])
+                    mv.visitStoreW(var_tmp, temp, i * 4)
+        else:
+            # ? 局部变量的声明，如果有初始值，需要赋值
+            if decl.init_expr is not NULL:
+                decl.init_expr.accept(self, mv)
+                mv.visitAssignment(symbol.temp, decl.init_expr.getattr("val"))
 
     def visitAssignment(self, expr: Assignment, mv: FuncVisitor) -> None:
         """
@@ -127,15 +184,41 @@ class TACGen(Visitor[FuncVisitor, None]):
         val_tmp = expr.rhs.getattr("val")
         if lhs_symbol.isGlobal:
             # ? 全局变量的赋值
-            addr_tmp = mv.freshTemp()
-            mv.visitLoadSymbol(addr_tmp, lhs_symbol.name)
-            mv.visitStoreW(val_tmp, addr_tmp, 0)
-            expr.setattr("val", val_tmp)
+            if lhs_symbol.isArray:
+                # ? 如果是数组，则需要寻址
+                addr_tmp = mv.freshTemp()
+                mv.visitLoadSymbol(addr_tmp, lhs_symbol.name)
+                now_type = lhs_symbol.type.type
+                for indexExpr in expr.lhs.indexes:
+                    indexExpr.accept(self, mv)
+                    mv.visitArrayLoc(addr_tmp, indexExpr.getattr(
+                        "val"), now_type.base.size)
+                    now_type = now_type.base
+                mv.visitStoreW(val_tmp, addr_tmp, 0)
+            else:
+                # ? 如果是变量，访问符号地址，然后赋值
+                addr_tmp = mv.freshTemp()
+                mv.visitLoadSymbol(addr_tmp, lhs_symbol.name)
+                mv.visitStoreW(val_tmp, addr_tmp, 0)
         else:
             # ? 局部变量的赋值
-            lhs_temp = expr.lhs.getattr("symbol").temp
-            val_tmp = mv.visitAssignment(lhs_temp, val_tmp)
-            expr.setattr("val", val_tmp)
+            if lhs_symbol.isArray:
+                # ? 如果是数组，直接将数组的地址赋值给临时变量，然后和全局数组一样处理寻址
+                addr_tmp = mv.freshTemp()
+                mv.visitAssignment(addr_tmp, lhs_symbol.temp)
+                now_type = lhs_symbol.type.type
+                for indexExpr in expr.lhs.indexes:
+                    indexExpr.accept(self, mv)
+                    mv.visitArrayLoc(addr_tmp, indexExpr.getattr(
+                        "val"), now_type.base.size)
+                    now_type = now_type.base
+                mv.visitStoreW(val_tmp, addr_tmp, 0)
+            else:
+                # ? 如果是变量，直接赋值
+                lhs_temp = lhs_symbol.temp
+                val_tmp = mv.visitAssignment(lhs_temp, val_tmp)
+
+        expr.setattr("val", val_tmp)
 
     def visitIf(self, stmt: If, mv: FuncVisitor) -> None:
         stmt.cond.accept(self, mv)

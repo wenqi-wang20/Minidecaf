@@ -236,7 +236,7 @@ def p_unary_expression(p):
 
 def p_binary_expression(p):
     """
-    assignment : Identifier Assign expression
+    assignment : unary Assign expression
     logical_or : logical_or Or logical_and
     logical_and : logical_and And bit_or
     bit_or : bit_or BitOr xor
@@ -327,6 +327,46 @@ def p_continue(p):
     p[0] = Continue()
 
 
+# * Step 12
+def p_parameter(p):
+    """
+    parameter : parameter_item
+        | parameter_arr_single
+        | parameter_arr_multi
+    """
+    p[0] = p[1]
+
+
+# * Step 12
+def p_array_parameter_single_empty(p):
+    """
+    parameter_arr_single : parameter_item LBracket empty RBracket
+    """
+    p[1].dims.append(-1)
+    p[1].var_t = TArray(p[1].var_t.type, p[1].dims)
+    p[0] = p[1]
+
+
+# * Step 12
+def p_array_parameter_single(p):
+    """
+    parameter_arr_single : parameter_item LBracket Integer RBracket
+    """
+    p[1].dims.append(p[3].value)
+    p[1].var_t = TArray(p[1].var_t.type, p[1].dims)
+    p[0] = p[1]
+
+
+# * Step 12
+def p_array_parameter_multi(p):
+    """
+    parameter_arr_multi : parameter_arr_single LBracket Integer RBracket
+    """
+    p[1].dims.append(p[3].value)
+    p[1].var_t = TArray(p[1].var_t.type.full_indexed, p[1].dims)
+    p[0] = p[1]
+
+
 # * Step 9 done
 def p_parameter_item(p):
     """
@@ -338,7 +378,7 @@ def p_parameter_item(p):
 # * Step 9 done
 def p_parameter_list(p):
     """
-    parameter_list : parameter_list Comma parameter_item
+    parameter_list : parameter_list Comma parameter
     """
     if p[3] is not NULL:
         p[1].children.append(p[3])
@@ -348,7 +388,7 @@ def p_parameter_list(p):
 # * Step 9 done
 def p_parameter_single(p):
     """
-    parameter_list : parameter_item
+    parameter_list : parameter
     """
     p[0] = Parameter_list()
     p[0].children.append(p[1])
@@ -394,6 +434,99 @@ def p_call(p):
     postfix : Identifier LParen expression_list RParen
     """
     p[0] = Call(p[1], p[3])
+
+
+# * Step 11 done
+def p_postfix_array(p):
+    """
+    postfix : multidim_arr 
+        | singledim_arr
+    """
+    p[0] = p[1]
+
+
+# * Step 11 done
+def p_postfix_array_singledim(p):
+    """
+    singledim_arr : Identifier LBracket expression RBracket
+    """
+    p[0] = IndexExpression(p[1], p[3])
+
+
+# * Step 11 done
+def p_postfix_array_multidim(p):
+    """
+    multidim_arr : singledim_arr LBracket expression RBracket 
+        | multidim_arr LBracket expression RBracket
+    """
+    p[1].indexes.append(p[3])
+    p[0] = p[1]
+
+
+# * Step 11 done
+def p_decl_array(p):
+    """
+    declaration : multidim_decl 
+        | singledim_decl
+    """
+    p[0] = p[1]
+
+
+# * Step 11 done
+def p_decl_array_singledim(p):
+    """
+    singledim_decl : type Identifier LBracket Integer RBracket
+    """
+    p[0] = Declaration(TArray(p[1].type, [p[4].value]), p[2])
+    p[0].isArray = True
+    p[0].dims.append(p[4].value)
+
+
+# * Step 11 done
+def p_decl_array_multidim(p):
+    """
+    multidim_decl : singledim_decl LBracket Integer RBracket
+        | multidim_decl LBracket Integer RBracket
+    """
+    p[1].dims.append(p[3].value)
+    p[1].var_t = TArray(p[1].var_t.type.full_indexed, p[1].dims)
+    p[0] = p[1]
+
+
+# * Step 12
+def p_intlist_empty(p):
+    """
+    intlist : empty
+    """
+    p[0] = Integer_list()
+
+
+# * Step 12
+def p_intlist_single(p):
+    """
+    intlist : Integer
+    """
+    p[0] = Integer_list()
+    p[0].children.append(p[1].value)
+
+
+# * Step 12
+def p_intlist_multi(p):
+    """
+    intlist : intlist Comma Integer
+    """
+    p[1].children.append(p[3].value)
+    p[0] = p[1]
+
+
+# * Step 12
+def p_arrinit(p):
+    """
+    declaration : multidim_decl Assign LBrace intlist RBrace
+        | singledim_decl Assign LBrace intlist RBrace
+    """
+    p[1].init_expr = p[4]
+    p[0] = p[1]
 
 
 parser = yacc.yacc(start="program")

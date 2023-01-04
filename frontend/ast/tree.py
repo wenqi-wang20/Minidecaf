@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, Optional, TypeVar, Union
 
-from frontend.type import INT, DecafType
+from frontend.type import INT, DecafType, ArrayType
 from utils import T, U
 
 from .node import NULL, BinaryOp, Node, UnaryOp
@@ -302,6 +302,8 @@ class Declaration(Node):
         super().__init__("declaration")
         self.var_t = var_t
         self.ident = ident
+        self.isArray = False
+        self.dims = []
         self.init_expr = init_expr or NULL
 
     def __getitem__(self, key: int) -> Node:
@@ -508,6 +510,23 @@ class TInt(TypeLiteral):
         return v.visitTInt(self, ctx)
 
 
+# * Step 11 done
+class TArray(TypeLiteral):
+    "AST node of type `int[]`."
+
+    def __init__(self, type: DecafType, dims: list[int]) -> None:
+        super().__init__("type_array", ArrayType.multidim(type, dims))
+
+    def __getitem__(self, key: int) -> Node:
+        raise _index_len_err(key, self)
+
+    def __len__(self) -> int:
+        return 0
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitTArray(self, ctx)
+
+
 # * Step 9 done
 class Parameter_item(Node):
     """
@@ -516,14 +535,19 @@ class Parameter_item(Node):
 
     def __init__(self, var_type: TypeLiteral, ident: Identifier) -> None:
         super().__init__("parameter")
-        self.var_type = var_type
+        self.var_t = var_type
         self.ident = ident
+        self.dims = []
+
+    @property
+    def isArray(self) -> bool:
+        return len(self.dims) != 0
 
     def __getitem__(self, key: int) -> Node:
-        return (self.var_type, self.name)[key]
+        return (self.var_type, self.name, self.dims)[key]
 
     def __len__(self) -> int:
-        return 2
+        return 3
 
     def accept(self, v: Visitor[T, U], ctx: T):
         return v.visitParameterItem(self, ctx)
@@ -576,25 +600,46 @@ class Call(Node):
         return v.visitCall(self, ctx)
 
 
-# * Step 11
+# * Step 11 done
 class IndexExpression(Expression):
     """
     AST node of index expression.
     """
 
-    def __init__(self, ident: Identifier, index: Expression) -> None:
+    def __init__(self, ident: Identifier, *indexes: Expression) -> None:
         super().__init__("index_expr")
         self.ident = ident
-        self.index = index
+        self.indexes = list(indexes)
+        self.value = ident.value
 
     def __getitem__(self, key: int) -> Node:
-        return (self.ident, self.index)[key]
+        return (self.ident, self.indexes)[key]
 
     def __len__(self) -> int:
         return 2
 
     def accept(self, v: Visitor[T, U], ctx: T):
-        return v.visitIndexExpr(self, ctx)
+        return v.visitIndexExpression(self, ctx)
 
     def __str__(self) -> str:
-        return f"{self.ident}[{self.index}]"
+        return str(self.ident) + ''.join(f"[{i}]" for i in self.indexes)
+
+
+# * Step 12
+class Integer_list(Expression):
+    """
+    AST node of integer list.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("integer_list")
+        self.children = []
+
+    def __getitem__(self, key: int) -> Node:
+        return self.children[key]
+
+    def __len__(self) -> int:
+        return len(self.children)
+
+    def accept(self, v: Visitor[T, U], ctx: T):
+        return v.visitIntegerList(self, ctx)

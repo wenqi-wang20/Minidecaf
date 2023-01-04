@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .builtin_type import INT
 from .type import DecafType
+import ipdb
 
 """
 Array type is represented in a recursive form.
@@ -27,6 +28,7 @@ class ArrayType(DecafType):
 
     @property
     def _indexes(self) -> str:
+
         if isinstance(self.base, ArrayType):
             return f"[{self.length}]{self.base._indexes}"
         else:
@@ -50,7 +52,7 @@ class ArrayType(DecafType):
     def __eq__(self, o: object) -> bool:
         if (
             isinstance(o, type(self))
-            and o.length == self.length
+            and (o.length == self.length or o.length == -1 or self.length == -1)
             and o.base == self.base
         ):
             return True
@@ -61,9 +63,9 @@ class ArrayType(DecafType):
         return f"{self.full_indexed}{self._indexes}"
 
     @classmethod
-    def multidim(cls, base: DecafType, *dims: int) -> ArrayType:
+    def multidim(cls, base: DecafType, dims: list[int]) -> ArrayType:
         "To quickly generate a high-dimension array."
-        if dims:
-            return cls(cls.multidim(base, *dims[1:]), dims[0])
+        if dims != []:
+            return cls(cls.multidim(base, dims[1:]), dims[0])
         else:
             return base  # type: ignore

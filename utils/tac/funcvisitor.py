@@ -4,6 +4,9 @@ from typing import Any, Optional, Union
 
 from utils.label.funclabel import FuncLabel
 from utils.label.label import Label
+from frontend.symbol.varsymbol import VarSymbol
+from frontend.ast.node import NULL
+from frontend.ast.tree import Declaration
 
 from .context import Context
 from .tacfunc import TACFunc
@@ -18,9 +21,39 @@ class FuncVisitor:
         self.func = TACFunc(entry, numArgs)
         self.visitLabel(entry)
         self.nextTempId = 0
+        self.global_init = None
 
         self.continueLabelStack = []
         self.breakLabelStack = []
+
+    # * Step 12
+    def initglobal_vars(self, global_init: list[Declaration]) -> None:
+        self.global_init = global_init
+        # * Step 12
+        # ? 在这里需要初始化全局数组变量
+        if self.global_init is not None:
+            for arr_init in self.global_init:
+                if arr_init.isArray:
+                    # ? 加载 fill_n 指令的参数
+                    addr_tmp = self.freshTemp()
+                    self.visitLoadSymbol(addr_tmp, arr_init.ident.value)
+                    self.visitParam(addr_tmp)
+                    num_tmp = self.visitLoad(0)
+                    self.visitParam(num_tmp)
+                    len_tmp = self.visitLoad(arr_init.var_t.type.size)
+                    self.visitParam(len_tmp)
+
+                    # ? 加载 fill_n 指令
+                    val_tmp = self.freshTemp()
+                    self.visitCall(val_tmp, FuncLabel('fill_n'),
+                                   [addr_tmp, num_tmp, len_tmp])
+
+                    if arr_init.init_expr is not NULL:
+                        # ? 逐个赋值
+                        init_vars = arr_init.init_expr.children
+                        for i in range(len(init_vars)):
+                            var_tmp = self.visitLoad(init_vars[i])
+                            self.visitStoreW(var_tmp, addr_tmp, i * 4)
 
     # To get a fresh new temporary variable.
     def freshTemp(self) -> Temp:
@@ -98,17 +131,28 @@ class FuncVisitor:
     def visitCall(self, ret_val: Temp, func: FuncLabel, argument_list: list[Temp]) -> None:
         self.func.add(Call(ret_val, func, argument_list))
 
-    # * Step 10
+    # * Step 10 done
     def visitLoadSymbol(self, dst: Temp, symbol: str) -> None:
         self.func.add(LoadSymbol(dst, symbol))
 
-    # * Step 10
+    # * Step 10 done
     def visitLoadW(self, dst: Temp, src: Temp, offset: int) -> None:
         self.func.add(LoadW(dst, src, offset))
 
-    # * Step 10
+    # * Step 10 done
     def visitStoreW(self, dst: Temp, src: Temp, offset: int) -> None:
         self.func.add(StoreW(dst, src, offset))
+
+    # * Step 11 done
+    def visitAlloc(self, dst: Temp, size: int) -> None:
+        self.func.add(Alloc(dst, size))
+
+    # * Step 11 done
+    def visitArrayLoc(self, addr: Temp, index: Temp, size: int) -> None:
+        # ? 记住这里不能使用 index 作为中间传递值，这样可能会改变 Index 的值，导致外部的值也被改变
+        size_temp = self.visitLoad(size)
+        self.visitBinarySelf(BinaryOp.MUL, size_temp, index)
+        self.visitBinarySelf(BinaryOp.ADD, addr, size_temp)
 
     # To open a new loop (for break/continue statements)
     def openLoop(self, breakLabel: Label, continueLabel: Label) -> None:

@@ -100,6 +100,18 @@ class Visitor(Protocol[T, U]):  # type: ignore
     def visitCall(self, that: Call, ctx: T) -> Optional[U]:
         return self.visitOther(that, ctx)
 
+    # * Step 11 done
+    def visitTArray(self, that: TArray, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
+    # * Step 11 done
+    def visitIndexExpression(self, that: IndexExpression, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
+    # * Step 12 done
+    def visitIntegerList(self, that: Integer_list, ctx: T) -> Optional[U]:
+        return self.visitOther(that, ctx)
+
 
 class RecursiveVisitor(Visitor[T, U]):
     def visitOther(self, node: Node, ctx: T) -> Optional[Sequence[Optional[U]]]:

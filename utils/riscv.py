@@ -148,6 +148,18 @@ class Riscv:
                 str(Riscv.SP), str(Riscv.SP), str(self.offset)
             )
 
+    # * Step 11 done
+    class CalLocation(NativeInstr):
+        def __init__(self, dst: Reg, src: Reg, offset: int) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [src], None)
+            self.offset = offset
+
+        def __str__(self) -> str:
+            assert -2048 <= self.offset <= 2047
+            return "addi " + Riscv.FMT3.format(
+                str(self.dsts[0]), str(self.srcs[0]), str(self.offset)
+            )
+
     class NativeStoreWord(NativeInstr):
         def __init__(self, src: Reg, base: Reg, offset: int) -> None:
             super().__init__(InstrKind.SEQ, [], [src, base], None)
@@ -242,7 +254,7 @@ class Riscv:
         def __str__(self) -> str:
             return 'lw ' + Riscv.FMT_OFFSET.format(self.dsts[0], self.offset, self.srcs[0])
 
-    # * Step 10
+    # * Step 10 done
     class StoreW(TACInstr):
         def __init__(self, dst: Temp, src: Temp, offset: int) -> None:
             super().__init__(InstrKind.SEQ, [], [dst, src], None)
@@ -250,3 +262,12 @@ class Riscv:
 
         def __str__(self) -> str:
             return 'sw ' + Riscv.FMT_OFFSET.format(self.srcs[0], self.offset, self.srcs[1])
+
+    # * Step 11 done
+    class Alloc(TACInstr):
+        def __init__(self, dst: Temp, size: int) -> None:
+            super().__init__(InstrKind.SEQ, [dst], [], None)
+            self.size = size
+
+        def __str__(self) -> str:
+            return ''

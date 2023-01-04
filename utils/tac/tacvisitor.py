@@ -7,24 +7,28 @@ class TACVisitor:
     def visitOther(self, instr: TACInstr) -> None:
         pass
 
-    # * Step 9
+    # * Step 9 done
     def visitParam(self, instr: Param) -> None:
         self.visitOther(instr)
 
-    # * Step 9
+    # * Step 9 done
     def visitCall(self, instr: Call) -> None:
         self.visitOther(instr)
 
-    # * Step 10
+    # * Step 10 done
     def visitLoadSymbol(self, instr: LoadSymbol) -> None:
         self.visitOther(instr)
 
-    # * Step 10
+    # * Step 10 done
     def visitLoadW(self, instr: LoadW) -> None:
         self.visitOther(instr)
 
-    # * Step 10
+    # * Step 10 done
     def visitStoreW(self, instr: StoreW) -> None:
+        self.visitOther(instr)
+
+    # * Step 11 done
+    def visitAlloc(self, instr: Alloc) -> None:
         self.visitOther(instr)
 
     def visitAssign(self, instr: Assign) -> None:

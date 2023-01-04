@@ -18,15 +18,19 @@ class ProgramWriter:
     def __init__(self, funcs: list[str], global_vars: list[VarSymbol]) -> None:
         self.funcs = []
         self.global_vars = global_vars
+        self.global_init = []
         self.ctx = Context()
         for func in funcs:
             # 已经将所有函数的入口标签加入到上下文中
             self.funcs.append(func)
             self.ctx.putFuncLabel(func)
 
+    # * Step 12
     def visitMainFunc(self) -> FuncVisitor:
         entry = MAIN_LABEL
-        return FuncVisitor(entry, 0, self.ctx)
+        mv = FuncVisitor(entry, 0, self.ctx)
+        mv.initglobal_vars(self.global_init)
+        return mv
 
     def visitFunc(self, name: str, numArgs: int) -> FuncVisitor:
         entry = self.ctx.getFuncLabel(name)
