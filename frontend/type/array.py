@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .builtin_type import INT
 from .type import DecafType
-import ipdb
 
 """
 Array type is represented in a recursive form.
